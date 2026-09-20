@@ -18,6 +18,9 @@ A reusable Spring Boot starter that prevents duplicate execution of important AP
 - Configurable processing timeout
 - Automatic Spring Boot auto-configuration
 - Handles missing keys and key conflicts
+- Atomically reserves Redis keys before controller execution
+- Prevents an expired request from overwriting a newer reservation
+- Reclaims stale `PROCESSING` records after the configured timeout
 - Compatible with Maven Central
 
 ## Requirements
@@ -34,7 +37,7 @@ Add the dependency to your `pom.xml`:
 <dependency>
     <groupId>io.github.iroshperera</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -80,6 +83,10 @@ idempotency:
   reject-different-request-hash: true
 ```
 
+The global configuration is used by `@Idempotent` unless a method-level
+annotation value overrides it. Set `idempotency.enabled` to `false` to disable
+the starter without removing the dependency.
+
 ### Configuration Properties
 
 | Property | Description | Example |
@@ -120,6 +127,11 @@ The controller is executed and the response is saved using the idempotency key.
 
 The saved response is returned without executing the controller again.
 
+For Redis storage, the first request atomically reserves the key using Redis
+`SET NX` semantics. A concurrent request with the same key is rejected while
+the first request is still processing. After completion, the stored response
+is returned on retries.
+
 ### Same key with a different body
 
 The request is rejected with HTTP `409 Conflict`.
@@ -158,6 +170,10 @@ Suitable for local development, testing, and single-instance applications.
 
 Recommended for distributed or multi-instance applications where all application instances must share idempotency records.
 
+Redis completion and cleanup operations are protected by a reservation id, so
+an older request cannot overwrite or delete a newer reservation after a key
+expires and is reused.
+
 ## Example cURL Request
 
 ```bash
@@ -181,12 +197,15 @@ To build release artifacts with signatures:
 mvn clean verify -Prelease
 ```
 
+The Redis integration tests use Testcontainers. They run automatically when a
+Docker environment is available and are skipped when Docker is unavailable.
+
 ## Maven Coordinates
 
 ```text
 Group ID:    io.github.iroshperera
 Artifact ID: spring-boot-idempotency-starter
-Version:     0.1.0
+Version:     0.2.0
 ```
 
 ## Source Code
@@ -194,6 +213,14 @@ Version:     0.1.0
 GitHub repository:
 
 https://github.com/IroshPerera/spring-boot-idempotency-starter
+
+## Version 0.2.0
+
+- Redis atomic acquisition coverage
+- Concurrent Redis acquisition test
+- Reservation ownership checks for completion and deletion
+- Stale processing timeout handling
+- Jackson and logging dependency alignment
 
 ## Roadmap
 

@@ -126,6 +126,44 @@ class InMemoryIdempotencyStoreTest {
         );
     }
 
+    @Test
+    void shouldNotAllowAnOldReservationToCompleteTheCurrentRecord() {
+
+        IdempotencyRecord firstRecord = createRecord();
+        firstRecord.setReservationId("first-owner");
+
+        IdempotencyRecord currentRecord = createRecord();
+        currentRecord.setReservationId("current-owner");
+
+        store.acquire(
+                "owner-key",
+                firstRecord,
+                Duration.ofMinutes(5)
+        );
+        store.delete("owner-key");
+        store.acquire(
+                "owner-key",
+                currentRecord,
+                Duration.ofMinutes(5)
+        );
+
+        store.saveCompleted(
+                "owner-key",
+                "first-owner",
+                200,
+                "{\"stale\":true}"
+        );
+
+        IdempotencyRecord result = store.findByKey("owner-key")
+                .orElseThrow();
+
+        assertEquals(
+                IdempotencyStatus.PROCESSING,
+                result.getStatus()
+        );
+        assertEquals("current-owner", result.getReservationId());
+    }
+
     private IdempotencyRecord createRecord() {
         return new IdempotencyRecord(
                 "test-key",

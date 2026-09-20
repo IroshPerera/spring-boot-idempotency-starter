@@ -9,9 +9,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Idempotent {
 
-    String keyHeader() default "Idempotency-Key";
+    String keyHeader() default "";
 
-    long expirySeconds() default 86400;
+    long expirySeconds() default -1;
 
     boolean cacheResponse() default true;
 }

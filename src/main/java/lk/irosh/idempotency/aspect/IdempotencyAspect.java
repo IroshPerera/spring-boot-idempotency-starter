@@ -3,7 +3,9 @@ package lk.irosh.idempotency.aspect;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lk.irosh.idempotency.annotation.Idempotent;
+import lk.irosh.idempotency.config.IdempotencyProperties;
 import lk.irosh.idempotency.model.IdempotencyRecord;
+import lk.irosh.idempotency.service.IdempotencyReservation;
 import lk.irosh.idempotency.service.IdempotencyService;
 import lk.irosh.idempotency.util.RequestHashUtil;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -14,7 +16,6 @@ import org.springframework.http.ResponseEntity;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Optional;
 
 @Aspect
 public class IdempotencyAspect {
@@ -25,14 +26,18 @@ public class IdempotencyAspect {
 
     private final HttpServletRequest request;
 
+    private final IdempotencyProperties properties;
+
     public IdempotencyAspect(
             IdempotencyService idempotencyService,
             ObjectMapper objectMapper,
-            HttpServletRequest request
+            HttpServletRequest request,
+            IdempotencyProperties properties
     ) {
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
         this.request = request;
+        this.properties = properties;
     }
 
     @Around("@annotation(lk.irosh.idempotency.annotation.Idempotent)")
@@ -45,26 +50,36 @@ public class IdempotencyAspect {
         Idempotent annotation =
                 method.getAnnotation(Idempotent.class);
 
-        String idempotencyKey =
-                request.getHeader(annotation.keyHeader());
+        String headerName = annotation.keyHeader().isBlank()
+                ? properties.getHeaderName()
+                : annotation.keyHeader();
+
+        String idempotencyKey = request.getHeader(headerName);
+
+        if ((idempotencyKey == null || idempotencyKey.isBlank())
+                && !properties.isRequired()) {
+            return joinPoint.proceed();
+        }
 
         String requestHash =
                 createRequestHash(joinPoint);
 
-        Optional<IdempotencyRecord> existing =
-                idempotencyService.reserve(
+        java.time.Duration ttl = annotation.expirySeconds() > 0
+                ? java.time.Duration.ofSeconds(annotation.expirySeconds())
+                : properties.getDefaultExpiry();
+
+        IdempotencyReservation reservation =
+                idempotencyService.reserveRequest(
                         idempotencyKey,
                         requestHash,
                         request.getRequestURI(),
                         request.getMethod(),
-                        java.time.Duration.ofSeconds(
-                                annotation.expirySeconds()
-                        )
+                        ttl
                 );
 
-        if (existing.isPresent()) {
+        if (reservation.isReplay()) {
             return convertSavedResponse(
-                    existing.get(),
+                    reservation.completedRecord().orElseThrow(),
                     method
             );
         }
@@ -72,10 +87,17 @@ public class IdempotencyAspect {
         try {
             Object response = joinPoint.proceed();
 
-            if (annotation.cacheResponse()) {
+            if (annotation.cacheResponse()
+                    && properties.isCacheResponse()) {
                 saveResponse(
                         idempotencyKey,
+                        reservation.reservationId(),
                         response
+                );
+            } else {
+                idempotencyService.release(
+                        idempotencyKey,
+                        reservation.reservationId()
                 );
             }
 
@@ -83,7 +105,8 @@ public class IdempotencyAspect {
 
         } catch (Throwable exception) {
             idempotencyService.fail(
-                    idempotencyKey
+                    idempotencyKey,
+                    reservation.reservationId()
             );
 
             throw exception;
@@ -119,6 +142,7 @@ public class IdempotencyAspect {
 
     private void saveResponse(
             String idempotencyKey,
+            String reservationId,
             Object response
     ) throws Exception {
 
@@ -135,6 +159,7 @@ public class IdempotencyAspect {
 
         idempotencyService.complete(
                 idempotencyKey,
+                reservationId,
                 status,
                 responseBody
         );

@@ -10,16 +10,43 @@ import lk.irosh.idempotency.storage.IdempotencyStore;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 public class IdempotencyService {
 
     private final IdempotencyStore store;
 
+    private final Duration processingTimeout;
+
     public IdempotencyService(IdempotencyStore store) {
+        this(store, Duration.ofMinutes(5));
+    }
+
+    public IdempotencyService(
+            IdempotencyStore store,
+            Duration processingTimeout
+    ) {
         this.store = store;
+        this.processingTimeout = processingTimeout;
     }
 
     public Optional<IdempotencyRecord> reserve(
+            String key,
+            String requestHash,
+            String endpoint,
+            String httpMethod,
+            Duration ttl
+    ) {
+        return reserveRequest(
+                key,
+                requestHash,
+                endpoint,
+                httpMethod,
+                ttl
+        ).completedRecord();
+    }
+
+    public IdempotencyReservation reserveRequest(
             String key,
             String requestHash,
             String endpoint,
@@ -39,32 +66,40 @@ public class IdempotencyService {
                     requestHash
             );
 
-            if (record.getStatus()
-                    == IdempotencyStatus.PROCESSING) {
+            if (record.getStatus() == IdempotencyStatus.PROCESSING) {
+                if (!isProcessingExpired(record)) {
+                    throw new DuplicateRequestException(
+                            "The request is already being processed"
+                    );
+                }
 
-                throw new DuplicateRequestException(
-                        "The request is already being processed"
+                store.delete(key);
+            }
+
+            if (record.getStatus() == IdempotencyStatus.COMPLETED) {
+
+                return new IdempotencyReservation(
+                        existing,
+                        null
                 );
             }
 
-            if (record.getStatus()
-                    == IdempotencyStatus.COMPLETED) {
-
-                return existing;
+            if (record.getStatus() == IdempotencyStatus.FAILED) {
+                store.delete(key);
             }
-
-            store.delete(key);
         }
 
+        Instant createdAt = Instant.now();
         IdempotencyRecord newRecord =
                 new IdempotencyRecord(
                         key,
+                        UUID.randomUUID().toString(),
                         requestHash,
                         endpoint,
                         httpMethod,
                         IdempotencyStatus.PROCESSING,
-                        Instant.now(),
-                        Instant.now().plus(ttl)
+                        createdAt,
+                        createdAt.plus(ttl)
                 );
 
         boolean acquired = store.acquire(
@@ -79,7 +114,10 @@ public class IdempotencyService {
             );
         }
 
-        return Optional.empty();
+        return new IdempotencyReservation(
+                Optional.empty(),
+                newRecord.getReservationId()
+        );
     }
 
     public void complete(
@@ -87,15 +125,51 @@ public class IdempotencyService {
             int httpStatus,
             String responseBody
     ) {
+        Optional<IdempotencyRecord> existing = store.findByKey(key);
+
+        existing.ifPresent(record -> complete(
+                key,
+                record.getReservationId(),
+                httpStatus,
+                responseBody
+        ));
+    }
+
+    public void complete(
+            String key,
+            String reservationId,
+            int httpStatus,
+            String responseBody
+    ) {
         store.saveCompleted(
                 key,
+                reservationId,
                 httpStatus,
                 responseBody
         );
     }
 
     public void fail(String key) {
-        store.saveFailed(key);
+        Optional<IdempotencyRecord> existing = store.findByKey(key);
+
+        existing.ifPresent(record -> fail(
+                key,
+                record.getReservationId()
+        ));
+    }
+
+    public void fail(
+            String key,
+            String reservationId
+    ) {
+        store.saveFailed(key, reservationId);
+    }
+
+    public void release(
+            String key,
+            String reservationId
+    ) {
+        store.delete(key, reservationId);
     }
 
     private void validateKey(String key) {
@@ -119,5 +193,13 @@ public class IdempotencyService {
                             "with a different request"
             );
         }
+    }
+
+    private boolean isProcessingExpired(IdempotencyRecord record) {
+        Instant createdAt = record.getCreatedAt();
+
+        return createdAt != null
+                && createdAt.plus(processingTimeout)
+                .isBefore(Instant.now());
     }
 }
