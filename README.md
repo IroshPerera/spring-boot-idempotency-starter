@@ -1,5 +1,8 @@
 # Spring Boot Idempotency Starter
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.iroshperera/spring-boot-idempotency-starter.svg)](https://central.sonatype.com/artifact/io.github.iroshperera/spring-boot-idempotency-starter)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A reusable Spring Boot starter that prevents duplicate execution of important API requests such as orders, payments and bookings.
 
 ## Features
