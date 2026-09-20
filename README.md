@@ -2,6 +2,7 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.iroshperera/spring-boot-idempotency-starter.svg)](https://central.sonatype.com/artifact/io.github.iroshperera/spring-boot-idempotency-starter)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Maven Build](https://github.com/IroshPerera/spring-boot-idempotency-starter/actions/workflows/maven.yml/badge.svg)](https://github.com/IroshPerera/spring-boot-idempotency-starter/actions/workflows/maven.yml)
 
 A reusable Spring Boot starter that prevents duplicate execution of important API requests such as orders, payments, bookings, and other operations that must be processed only once.
 
