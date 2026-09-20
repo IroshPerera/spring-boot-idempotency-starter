@@ -20,7 +20,7 @@ A reusable Spring Boot starter that prevents duplicate execution of important AP
 <dependency>
     <groupId>lk.irosh</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 
