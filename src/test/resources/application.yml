@@ -1,0 +1,9 @@
+idempotency:
+  enabled: true
+  storage: memory
+  required: true
+  header-name: Idempotency-Key
+  default-expiry: 24h
+  processing-timeout: 5m
+  cache-response: true
+  reject-different-request-hash: true
