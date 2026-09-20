@@ -1,0 +1,15 @@
+idempotency:
+  enabled: true
+  storage: redis
+  required: true
+  header-name: Idempotency-Key
+  default-expiry: 24h
+  processing-timeout: 5m
+  cache-response: true
+  reject-different-request-hash: true
+
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
