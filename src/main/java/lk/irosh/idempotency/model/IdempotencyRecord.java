@@ -6,6 +6,8 @@ public class IdempotencyRecord {
 
     private String key;
 
+    private String reservationId;
+
     private String requestHash;
 
     private String endpoint;
@@ -36,7 +38,30 @@ public class IdempotencyRecord {
             Instant createdAt,
             Instant expiresAt
     ) {
+        this(
+                key,
+                null,
+                requestHash,
+                endpoint,
+                httpMethod,
+                status,
+                createdAt,
+                expiresAt
+        );
+    }
+
+    public IdempotencyRecord(
+            String key,
+            String reservationId,
+            String requestHash,
+            String endpoint,
+            String httpMethod,
+            IdempotencyStatus status,
+            Instant createdAt,
+            Instant expiresAt
+    ) {
         this.key = key;
+        this.reservationId = reservationId;
         this.requestHash = requestHash;
         this.endpoint = endpoint;
         this.httpMethod = httpMethod;
@@ -51,6 +76,14 @@ public class IdempotencyRecord {
 
     public void setKey(String key) {
         this.key = key;
+    }
+
+    public String getReservationId() {
+        return reservationId;
+    }
+
+    public void setReservationId(String reservationId) {
+        this.reservationId = reservationId;
     }
 
     public String getRequestHash() {

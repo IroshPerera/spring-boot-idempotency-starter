@@ -53,31 +53,52 @@ public class InMemoryIdempotencyStore
             int httpStatus,
             String responseBody
     ) {
-        IdempotencyRecord record = records.get(key);
+        saveCompleted(key, null, httpStatus, responseBody);
+    }
 
-        if (record != null) {
+    @Override
+    public void saveCompleted(
+            String key,
+            String reservationId,
+            int httpStatus,
+            String responseBody
+    ) {
+        records.computeIfPresent(key, (ignored, record) -> {
+            if (!matchesReservation(record, reservationId)) {
+                return record;
+            }
+
             record.setStatus(
                     lk.irosh.idempotency.model.IdempotencyStatus.COMPLETED
             );
-
             record.setHttpStatus(httpStatus);
             record.setResponseBody(responseBody);
             record.setCompletedAt(Instant.now());
-        }
+            return record;
+        });
     }
 
     @Override
     public void saveFailed(String key) {
+        saveFailed(key, null);
+    }
 
-        IdempotencyRecord record = records.get(key);
+    @Override
+    public void saveFailed(
+            String key,
+            String reservationId
+    ) {
+        records.computeIfPresent(key, (ignored, record) -> {
+            if (!matchesReservation(record, reservationId)) {
+                return record;
+            }
 
-        if (record != null) {
             record.setStatus(
                     lk.irosh.idempotency.model.IdempotencyStatus.FAILED
             );
-
             record.setCompletedAt(Instant.now());
-        }
+            return record;
+        });
     }
 
     @Override
@@ -85,9 +106,26 @@ public class InMemoryIdempotencyStore
         records.remove(key);
     }
 
+    @Override
+    public void delete(String key, String reservationId) {
+        records.computeIfPresent(key, (ignored, record) ->
+                matchesReservation(record, reservationId)
+                        ? null
+                        : record
+        );
+    }
+
     private boolean isExpired(IdempotencyRecord record) {
 
         return record.getExpiresAt() != null
                 && record.getExpiresAt().isBefore(Instant.now());
+    }
+
+    private boolean matchesReservation(
+            IdempotencyRecord record,
+            String reservationId
+    ) {
+        return reservationId == null
+                || reservationId.equals(record.getReservationId());
     }
 }

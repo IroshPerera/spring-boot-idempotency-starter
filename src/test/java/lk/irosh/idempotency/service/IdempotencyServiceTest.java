@@ -120,4 +120,48 @@ class IdempotencyServiceTest {
                 )
         );
     }
+
+    @Test
+    void shouldReclaimAnExpiredProcessingRequest() throws InterruptedException {
+
+        service = new IdempotencyService(
+                new InMemoryIdempotencyStore(),
+                Duration.ofMillis(20)
+        );
+
+        service.reserve(
+                "expired-processing-key",
+                "hash-1",
+                "/orders",
+                "POST",
+                Duration.ofMinutes(5)
+        );
+
+        Thread.sleep(40);
+
+        Optional<IdempotencyRecord> result = service.reserve(
+                "expired-processing-key",
+                "hash-1",
+                "/orders",
+                "POST",
+                Duration.ofMinutes(5)
+        );
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void shouldExposeAReservationIdForTheRequestOwner() {
+
+        IdempotencyReservation reservation = service.reserveRequest(
+                "owner-key",
+                "hash-owner",
+                "/orders",
+                "POST",
+                Duration.ofMinutes(5)
+        );
+
+        assertFalse(reservation.isReplay());
+        assertNotNull(reservation.reservationId());
+    }
 }

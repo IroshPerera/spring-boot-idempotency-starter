@@ -7,6 +7,7 @@ import lk.irosh.idempotency.service.IdempotencyService;
 import lk.irosh.idempotency.storage.IdempotencyStore;
 import lk.irosh.idempotency.storage.InMemoryIdempotencyStore;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -17,6 +18,16 @@ import org.springframework.context.annotation.Import;
 import jakarta.servlet.http.HttpServletRequest;
 
 @AutoConfiguration
+@ConditionalOnClass({
+        ObjectMapper.class,
+        HttpServletRequest.class
+})
+@ConditionalOnProperty(
+        prefix = "idempotency",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 @EnableAspectJAutoProxy
 @EnableConfigurationProperties(
         IdempotencyProperties.class
@@ -39,10 +50,12 @@ public class IdempotencyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public IdempotencyService idempotencyService(
-            IdempotencyStore idempotencyStore
+            IdempotencyStore idempotencyStore,
+            IdempotencyProperties properties
     ) {
         return new IdempotencyService(
-                idempotencyStore
+                idempotencyStore,
+                properties.getProcessingTimeout()
         );
     }
 
@@ -51,12 +64,14 @@ public class IdempotencyAutoConfiguration {
     public IdempotencyAspect idempotencyAspect(
             IdempotencyService idempotencyService,
             ObjectMapper objectMapper,
-            HttpServletRequest request
+            HttpServletRequest request,
+            IdempotencyProperties properties
     ) {
         return new IdempotencyAspect(
                 idempotencyService,
                 objectMapper,
-                request
+                request,
+                properties
         );
     }
 
