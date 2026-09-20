@@ -18,7 +18,7 @@ A reusable Spring Boot starter that prevents duplicate execution of important AP
 
 ```xml
 <dependency>
-    <groupId>lk.irosh</groupId>
+    <groupId>io.github.iroshperera</groupId>
     <artifactId>spring-boot-idempotency-starter</artifactId>
     <version>0.1.0</version>
 </dependency>
