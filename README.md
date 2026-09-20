@@ -3,21 +3,31 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.iroshperera/spring-boot-idempotency-starter.svg)](https://central.sonatype.com/artifact/io.github.iroshperera/spring-boot-idempotency-starter)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A reusable Spring Boot starter that prevents duplicate execution of important API requests such as orders, payments and bookings.
+A reusable Spring Boot starter that prevents duplicate execution of important API requests such as orders, payments, bookings, and other operations that must be processed only once.
 
 ## Features
 
-- Prevents duplicate requests
-- Supports `Idempotency-Key` header
-- Request body hash validation
-- Response caching
+- Prevents duplicate request execution
+- Supports the `Idempotency-Key` request header
+- Validates request body hashes
+- Caches completed responses
 - In-memory storage
 - Redis storage
-- Configurable expiry time
-- Automatic Spring Boot configuration
-- Duplicate request exception handling
+- Configurable record expiry
+- Configurable processing timeout
+- Automatic Spring Boot auto-configuration
+- Handles missing keys and key conflicts
+- Compatible with Maven Central
+
+## Requirements
+
+- Java 17 or higher
+- Spring Boot 3.x
+- Maven 3.8 or higher
 
 ## Installation
+
+Add the dependency to your `pom.xml`:
 
 ```xml
 <dependency>
@@ -29,7 +39,11 @@ A reusable Spring Boot starter that prevents duplicate execution of important AP
 
 ## Basic Usage
 
+Add the `@Idempotent` annotation to an important `POST` endpoint:
+
 ```java
+import lk.irosh.idempotency.annotation.Idempotent;
+
 @Idempotent
 @PostMapping("/orders")
 public OrderResponse createOrder(
@@ -41,6 +55,8 @@ public OrderResponse createOrder(
 
 ## Request Header
 
+Every protected request must include a unique idempotency key:
+
 ```http
 Idempotency-Key: order-request-001
 ```
@@ -48,6 +64,8 @@ Idempotency-Key: order-request-001
 The same key should be used when retrying the same request.
 
 ## Configuration
+
+Create `application.yml` in your application:
 
 ```yaml
 idempotency:
@@ -61,7 +79,22 @@ idempotency:
   reject-different-request-hash: true
 ```
 
+### Configuration Properties
+
+| Property | Description | Example |
+|---|---|---|
+| `idempotency.enabled` | Enables or disables idempotency processing | `true` |
+| `idempotency.storage` | Storage implementation | `memory` or `redis` |
+| `idempotency.required` | Requires the idempotency header | `true` |
+| `idempotency.header-name` | Request header name | `Idempotency-Key` |
+| `idempotency.default-expiry` | Stored record expiry duration | `24h` |
+| `idempotency.processing-timeout` | Maximum processing duration | `5m` |
+| `idempotency.cache-response` | Caches completed responses | `true` |
+| `idempotency.reject-different-request-hash` | Rejects the same key with a different body | `true` |
+
 ## Redis Configuration
+
+Set the storage mode to Redis:
 
 ```yaml
 idempotency:
@@ -74,22 +107,27 @@ spring:
       port: 6379
 ```
 
+Make sure a Redis server is running before starting the application.
+
 ## Request Behaviour
 
-```text
-First request:
-The controller is executed and the response is saved.
+### First request
 
-Repeated request:
+The controller is executed and the response is saved using the idempotency key.
+
+### Repeated request
+
 The saved response is returned without executing the controller again.
 
-Same key with different body:
-The request is rejected with HTTP 409 Conflict.
-```
+### Same key with a different body
+
+The request is rejected with HTTP `409 Conflict`.
 
 ## Error Responses
 
 ### Missing Idempotency Key
+
+HTTP status: `400 Bad Request`
 
 ```json
 {
@@ -100,6 +138,8 @@ The request is rejected with HTTP 409 Conflict.
 
 ### Different Request Body
 
+HTTP status: `409 Conflict`
+
 ```json
 {
   "success": false,
@@ -107,12 +147,61 @@ The request is rejected with HTTP 409 Conflict.
 }
 ```
 
-## Build
+## Storage Options
+
+### In-memory storage
+
+Suitable for local development, testing, and single-instance applications.
+
+### Redis storage
+
+Recommended for distributed or multi-instance applications where all application instances must share idempotency records.
+
+## Example cURL Request
+
+```bash
+curl -X POST http://localhost:8080/api/orders \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: order-request-001" \\
+  -d '{"item":"Laptop","quantity":1}'
+```
+
+Repeat the same request with the same key to receive the cached response.
+
+## Building From Source
 
 ```bash
 mvn clean test
 ```
 
+To build release artifacts with signatures:
+
+```bash
+mvn clean verify -Prelease
+```
+
+## Maven Coordinates
+
+```text
+Group ID:    io.github.iroshperera
+Artifact ID: spring-boot-idempotency-starter
+Version:     0.1.0
+```
+
+## Source Code
+
+GitHub repository:
+
+https://github.com/IroshPerera/spring-boot-idempotency-starter
+
+## Roadmap
+
+- JDBC and PostgreSQL storage
+- MongoDB storage
+- Distributed locking improvements
+- Metrics and monitoring support
+- Additional integration tests
+
 ## License
 
-MIT License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
